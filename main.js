@@ -8,6 +8,7 @@ window.addEventListener('DOMContentLoaded', function(){
     // create a scene
     var createScene = function(){
         var scene = new BABYLON.Scene(engine);
+        scene.clearColor = new BABYLON.Color4(0, 0, 0, 1); // Set pure black background
 
         // create a camera
         var camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
