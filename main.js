@@ -26,7 +26,7 @@ window.addEventListener('DOMContentLoaded', function(){
         light.intensity = 0.7;
 
         // Load the GLB model
-        BABYLON.SceneLoader.ImportMesh("", "models/", "gate-animated-1.glb", scene, function (meshes, particleSystems, skeletons, animationGroups) {
+        BABYLON.SceneLoader.ImportMesh("", "models/", "gate-animated-1-compressed.glb", scene, function (meshes, particleSystems, skeletons, animationGroups) {
             // Get the root mesh and adjust its transform
             const rootMesh = meshes[0];
             rootMesh.scaling = new BABYLON.Vector3(4.5, 4.5, 4.5);  // Scale to fill screen
@@ -42,26 +42,15 @@ window.addEventListener('DOMContentLoaded', function(){
                 animation.stop();
                 animation.reset();
 
-                // Add click handling to all meshes in the model
-                meshes.forEach(mesh => {
-                    mesh.isPickable = true;  // Enable picking (clicking)
-                    
-                    // Click event handling
-                    mesh.actionManager = new BABYLON.ActionManager(scene);
-                    mesh.actionManager.registerAction(
-                        new BABYLON.ExecuteCodeAction(
-                            BABYLON.ActionManager.OnPickTrigger,
-                            () => {
-                                console.log("Mesh clicked"); // Debug log
-                                // Only play if animation isn't already playing
-                                if (!animation.isPlaying) {
-                                    console.log("Playing animation"); // Debug log
-                                    animation.reset();
-                                    animation.start(false); // Using start() instead of play()
-                                }
-                            }
-                        )
-                    );
+                // Add click handling to the canvas
+                canvas.addEventListener('click', () => {
+                    console.log("Canvas clicked"); // Debug log
+                    // Only play if animation isn't already playing
+                    if (!animation.isPlaying) {
+                        console.log("Playing animation"); // Debug log
+                        animation.reset();
+                        animation.start(false); // Using start() instead of play()
+                    }
                 });
             } else {
                 console.log("No animation groups found in the model"); // Debug log
