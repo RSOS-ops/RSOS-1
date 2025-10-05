@@ -145,22 +145,24 @@ window.addEventListener('DOMContentLoaded', async () => {
             const animation = animationGroups[0];
             animation.stop();
 
-            const onCanvasClick = async () => {
+            const onCanvasClick = () => {
                 canvas.removeEventListener('click', onCanvasClick);
 
                 animation.play(false);
-                await animation.onAnimationEndObservable.runCoroutineAsync(scene);
 
-                motionBlur.isEnabled = true;
+                // Use addOnce for a reliable callback when the animation group ends
+                animation.onAnimationGroupEndObservable.addOnce(() => {
+                    motionBlur.isEnabled = true;
 
-                // Trigger UI and mesh animations to run concurrently after their respective delays
-                setTimeout(() => {
-                    animateUI(allRects, motionBlur, rootMesh);
-                }, AppConfig.ANIMATION_DELAY);
+                    // Trigger UI and mesh animations to run concurrently after their respective delays
+                    setTimeout(() => {
+                        animateUI(allRects, motionBlur, rootMesh);
+                    }, AppConfig.ANIMATION_DELAY);
 
-                setTimeout(() => {
-                    animateMeshFly(rootMesh);
-                }, AppConfig.MOVE_DELAY);
+                    setTimeout(() => {
+                        animateMeshFly(rootMesh);
+                    }, AppConfig.MOVE_DELAY);
+                });
             };
             canvas.addEventListener('click', onCanvasClick);
         }
