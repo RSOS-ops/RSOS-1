@@ -1,320 +1,216 @@
-window.addEventListener('DOMContentLoaded', function(){
-    // get the canvas DOM element
-    var canvas = document.getElementById('renderCanvas');
+window.addEventListener('DOMContentLoaded', async () => {
+    //-- CONFIGURATION --//
+    const AppConfig = {
+        CANVAS_ID: 'renderCanvas',
+        MODEL_PATH: 'models/',
+        MODEL_FILE: 'gate-animated-1.glb',
+        CAMERA_START_POS: new BABYLON.Vector3(0, -0.5, -7),
+        CAMERA_TARGET_OFFSET: new BABYLON.Vector3(0, 1, 0),
+        LIGHT_INTENSITY: 1,
+        GLOW_INTENSITY: 0.5,
+        MOTION_BLUR_STRENGTH: 1.5,
+        MOTION_BLUR_SAMPLES: 32,
+        MESH_SCALE: new BABYLON.Vector3(4.5, 4.5, 4.5),
+        MESH_START_POS: new BABYLON.Vector3(0, -1, 0),
+        MESH_ROTATION: new BABYLON.Vector3(0, -Math.PI, 0),
+        MESH_FLY_SPEED: 0.5,
+        RECT_WIDTH: 5,
+        RECT_HEIGHT: 3,
+        RECT_GAP: 1,
+        RECT_START_Z: 1000,
+        RECT_TARGET_Z: 10,
+        RECT_Y_POS: 7.5,
+        RECT_BORDER_WIDTH: 0.05,
+        RECT_CORNER_RADIUS: 0.3,
+        RECT_LABELS: ["Art", "Visuals", "Code"],
+        ANIMATION_DELAY: 1000, // ms
+        FADE_DURATION: 1000, // ms
+        FLY_DURATION: 1000, // ms
+    };
 
-    // create a Babylon.js engine
-    var engine = new BABYLON.Engine(canvas, true);
+    //-- UTILITY FUNCTIONS --//
+    const delay = ms => new Promise(res => setTimeout(res, ms));
 
-    // create a scene
-    var createScene = function(){
-        var scene = new BABYLON.Scene(engine);
-        scene.clearColor = new BABYLON.Color4(0, 0, 0, 1); // Set pure black background
+    //-- BABYLON.JS SETUP --//
+    const canvas = document.getElementById(AppConfig.CANVAS_ID);
+    const engine = new BABYLON.Engine(canvas, true, { antialias: true });
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0, 0, 0, 1);
 
-        // create a camera
-        var camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI / 2, 7, new BABYLON.Vector3(0, 1, 0), scene);
-    camera.attachControl(canvas, false); // Attach controls but disable user interaction
-    camera.inputs.clear(); // Remove all input controls so user cannot orbit or pan
-        camera.lowerRadiusLimit = 5;  // Prevent zooming too close
-        camera.upperRadiusLimit = 12; // Prevent zooming too far
-        camera.lowerBetaLimit = Math.PI / 3; // Limit how high user can rotate
-        camera.upperBetaLimit = Math.PI / 1.8; // Limit how low user can rotate
-        
-        // Position camera to look directly at the front of the model
-    camera.setPosition(new BABYLON.Vector3(0, -.5, -7));
+    const createCamera = () => {
+        const camera = new BABYLON.ArcRotateCamera("Camera", Math.PI, Math.PI / 2, 7, AppConfig.CAMERA_TARGET_OFFSET, scene);
+        camera.attachControl(canvas, false);
+        camera.inputs.clear(); // Disable all user controls
+        camera.setPosition(AppConfig.CAMERA_START_POS);
+        return camera;
+    };
 
-        // create a light
-        var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
-        light.intensity = 1;
+    const createLighting = () => {
+        const light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+        light.intensity = AppConfig.LIGHT_INTENSITY;
+        const glowLayer = new BABYLON.GlowLayer("glow", scene);
+        glowLayer.intensity = AppConfig.GLOW_INTENSITY;
+    };
 
-    // Add glow to the scene
-    var glowLayer = new BABYLON.GlowLayer("glow", scene);
-    glowLayer.intensity = .5;
+    const createUI = () => {
+        const totalWidth = 3 * AppConfig.RECT_WIDTH + 2 * AppConfig.RECT_GAP;
+        const startX = -totalWidth / 2 + AppConfig.RECT_WIDTH / 2;
+        const allRects = [];
 
-        // Create 3 rounded rectangles positioned 10 units behind the model
-        const rectWidth = 5; // Width of each rectangle
-        const rectHeight = 3; // Height of each rectangle
-        const gap = 1; // 1 unit gap between rectangles
-        const totalWidth = 3 * rectWidth + 2 * gap; // total width occupied by all rectangles and gaps
-        const zPosition = 1000; // units behind model (was 10)
-        const yPosition = 7.5; // Top of screen
-        const startX = -totalWidth / 2 + rectWidth / 2; // leftmost rectangle center
-        
-        const allRects = []; // Store all rectangle parts
-        
-        // Create material for rectangles
         const rectMaterial = new BABYLON.StandardMaterial("rectMat", scene);
-        rectMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0); // Black
+        rectMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
         rectMaterial.emissiveColor = new BABYLON.Color3(0, 0, 0);
         rectMaterial.wireframe = false;
-        
-        // Border material
+
         const borderMaterial = new BABYLON.StandardMaterial("borderMat", scene);
         borderMaterial.emissiveColor = BABYLON.Color3.FromHexString("#ce02d4");
-        
-        // Create 3 rectangles
+
+        const path = createRoundedRectPath(AppConfig.RECT_WIDTH, AppConfig.RECT_HEIGHT, AppConfig.RECT_CORNER_RADIUS);
+
         for (let i = 0; i < 3; i++) {
-            // Create rounded rectangle using a plane with custom shape
-            const rect = BABYLON.MeshBuilder.CreatePlane("rect" + i, {
-                width: rectWidth,
-                height: rectHeight
-            }, scene);
-            
-            // Position rectangles evenly spaced
-            rect.position.x = startX + i * (rectWidth + gap);
-            rect.position.y = yPosition;
-            rect.position.z = zPosition;
+            const rect = BABYLON.MeshBuilder.CreatePlane(`rect${i}`, { width: AppConfig.RECT_WIDTH, height: AppConfig.RECT_HEIGHT }, scene);
+            rect.position = new BABYLON.Vector3(startX + i * (AppConfig.RECT_WIDTH + AppConfig.RECT_GAP), AppConfig.RECT_Y_POS, AppConfig.RECT_START_Z);
             rect.material = rectMaterial;
-            rect.setEnabled(false); // Initially hidden
-            allRects.push(rect); // Add to list
-            // Removed: rect.rotation.z = Math.PI / 2; // No rotation
-            
-            // Create border using thin tubes to simulate rounded rectangle border
-            const borderWidth = 0.05;
-            const cornerRadius = 0.3;
-            
-            // Create border path for rounded rectangle
-            const path = [];
-            const hw = rectWidth / 2 - cornerRadius;
-            const hh = rectHeight / 2 - cornerRadius;
-            
-            // Create rounded corners using points
-            const segments = 8;
-            // Top right corner
-            for (let j = 0; j <= segments; j++) {
-                const angle = (Math.PI / 2) * (j / segments);
-                path.push(new BABYLON.Vector3(hw + cornerRadius * Math.cos(angle), hh + cornerRadius * Math.sin(angle), 0));
-            }
-            // Top left corner
-            for (let j = 0; j <= segments; j++) {
-                const angle = Math.PI / 2 + (Math.PI / 2) * (j / segments);
-                path.push(new BABYLON.Vector3(-hw + cornerRadius * Math.cos(angle), hh + cornerRadius * Math.sin(angle), 0));
-            }
-            // Bottom left corner
-            for (let j = 0; j <= segments; j++) {
-                const angle = Math.PI + (Math.PI / 2) * (j / segments);
-                path.push(new BABYLON.Vector3(-hw + cornerRadius * Math.cos(angle), -hh + cornerRadius * Math.sin(angle), 0));
-            }
-            // Bottom right corner
-            for (let j = 0; j <= segments; j++) {
-                const angle = 3 * Math.PI / 2 + (Math.PI / 2) * (j / segments);
-                path.push(new BABYLON.Vector3(hw + cornerRadius * Math.cos(angle), -hh + cornerRadius * Math.sin(angle), 0));
-            }
-            // Close the path
-            path.push(path[0]);
-            
-            // Create tube for border
-            const border = BABYLON.MeshBuilder.CreateTube("border" + i, {
-                path: path,
-                radius: borderWidth,
-                cap: BABYLON.Mesh.CAP_ALL
-            }, scene);
-            
+            rect.setEnabled(false);
+            allRects.push(rect);
+
+            const border = BABYLON.MeshBuilder.CreateTube(`border${i}`, { path, radius: AppConfig.RECT_BORDER_WIDTH, cap: BABYLON.Mesh.CAP_ALL }, scene);
             border.position = rect.position.clone();
-            // Removed: border.rotation.z = Math.PI / 2; // No rotation
             border.material = borderMaterial;
-            border.setEnabled(false); // Initially hidden
-            allRects.push(border); // Add to list
-            
-            // Create text for each rectangle
-            const textLabels = ["Art", "Visuals", "Code"];
-            const textPlane = BABYLON.MeshBuilder.CreatePlane("textPlane" + i, {
-                width: rectWidth * 0.8,
-                height: rectHeight * 0.3
-            }, scene);
-            
-            // Create dynamic texture for text
-            const textTexture = new BABYLON.DynamicTexture("textTexture" + i, {width: 512, height: 128}, scene);
-            textTexture.hasAlpha = true;
-            textTexture.drawText(textLabels[i], null, null, "bold 48px Arial", "white", "transparent", true);
-            
-            // Create material for text with glow
-            const textMaterial = new BABYLON.StandardMaterial("textMat" + i, scene);
-            textMaterial.diffuseTexture = textTexture;
-            textMaterial.emissiveTexture = textTexture;
-            textMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1); // White glow
-            textMaterial.disableLighting = true;
-            textMaterial.useAlphaFromDiffuseTexture = true;
-            
-            // Position text at the center of the rectangle
+            border.setEnabled(false);
+            allRects.push(border);
+
+            const textPlane = createText(AppConfig.RECT_LABELS[i], i, scene);
             textPlane.position = rect.position.clone();
-            textPlane.position.z += 0.01; // Slightly in front of rectangle to avoid z-fighting
-            textPlane.material = textMaterial;
-            textPlane.setEnabled(false); // Initially hidden
-            allRects.push(textPlane); // Add to list so it moves with rectangles
+            textPlane.position.z += 0.01;
+            textPlane.setEnabled(false);
+            allRects.push(textPlane);
         }
 
-        // Load the GLB model
-        BABYLON.SceneLoader.ImportMesh("", "models/", "gate-animated-1.glb", scene, function (meshes, particleSystems, skeletons, animationGroups) {
-            // Get the root mesh and adjust its transform
-                const rootMesh = meshes[0];
-                rootMesh.scaling = new BABYLON.Vector3(4.5, 4.5, 4.5);  // Scale to fill screen
-                rootMesh.position = new BABYLON.Vector3(0, -1, 0);  // Slightly raised position for better centering
-                rootMesh.rotation = new BABYLON.Vector3(0, -Math.PI, 0);  // Rotate 180 degrees in the same direction to face camera
-                console.log("Root mesh position:", rootMesh.position);
-            
-            // Setup motion blur but don't enable it yet
-            const motionBlur = new BABYLON.MotionBlurPostProcess("mb", scene, 1.0, camera);
-            motionBlur.motionStrength = 3;
-            motionBlur.motionBlurSamples = 32;
-            motionBlur.excludedMeshes = scene.meshes.filter(mesh => mesh !== rootMesh);
-            motionBlur.isEnabled = false; // Start with blur disabled
-            
-            // Get the animation group
-            if (animationGroups && animationGroups.length > 0) {
-                const animation = animationGroups[0];
-                console.log("Animation found:", animation.name); // Debug log
-                
-                // Stop animation initially to make it static
-                animation.stop();
-                animation.reset();
+        return allRects;
+    };
 
-                // Add click handling to the canvas
-                let animationPlayed = false;
-                canvas.addEventListener('click', () => {
-                    if (animationPlayed) return;
-                    console.log("Canvas clicked"); // Debug log
-                    // Only play if animation isn't already playing
-                    if (!animation.isPlaying) {
-                        console.log("Playing animation"); // Debug log
-                        animation.reset();
-                        animation.start(false); // Using start() instead of play()
-                        animationPlayed = true;
-                        // After animation completes (75 frames), pause 1s, then move mesh
-                        let frames = 0;
-                        let moving = false;
-                        let moveTimeout;
-                        animation.onAnimationGroupEndObservable.addOnce(() => {
-                             // Enable motion blur when animation ends
-                             motionBlur.isEnabled = true;
-                             
-                             // Show rectangles 1 second after animation ends and start flying
-                             setTimeout(() => {
-                                 allRects.forEach(r => {
-                                     r.setEnabled(true);
-                                     if (r.material) r.material.alpha = 0;
-                                 });
-                                 let fadeFrame = 0;
-                                 const fadeDuration = 60; // 1 second at 60fps
-                                 let fading = true;
-                                 const fadeObserver = scene.onBeforeRenderObservable.add(() => {
-                                     if (fading) {
-                                         fadeFrame++;
-                                         let t = fadeFrame / fadeDuration;
-                                         if (t > 1) t = 1;
-                                         allRects.forEach(r => {
-                                             if (r.material) r.material.alpha = t;
-                                         });
-                                         if (t === 1) {
-                                             fading = false;
-                                             // Ensure rectangles and borders are fully visible after fade
-                                             allRects.forEach(r => {
-                                                 if (r.material) r.material.alpha = 1;
-                                             });
-                                             console.log("Rectangles and borders faded in and visible.");
-                                             // Remove this observer once fade is complete
-                                             scene.onBeforeRenderObservable.remove(fadeObserver);
-                                         }
-                                     }
-                                 });
-                                 // After fade, start flying
-                                 setTimeout(() => {
-                                     // Add rectangles to motion blur when they start flying
-                                     motionBlur.excludedMeshes = scene.meshes.filter(mesh => mesh !== rootMesh && !allRects.includes(mesh));
-                                     
-                                     // Animate rectangles flying from z=2000 to z=10 over 2 seconds
-                                     const startZ = 1000;
-                                     const targetZ = 10;
-                                     const flyDuration = 45; // frames for 1 second at 60fps
-                                     let flyFrame = 0;
-                                     let flying = true;
-                                     const flyObserver = scene.onBeforeRenderObservable.add(() => {
-                                         if (flying) {
-                                             flyFrame++;
-                                             let t = flyFrame / flyDuration;
-                                             if (t > 1) t = 1;
-                                             const currentZ = startZ + (targetZ - startZ) * t;
-                                             allRects.forEach(r => {
-                                                 r.position.z = currentZ;
-                                             });
-                                             if (t === 1) {
-                                                 flying = false;
-                                                 console.log("Rectangles and borders finished flying in.");
-                                                 // Remove rectangles from motion blur after flying is complete
-                                                 motionBlur.excludedMeshes = scene.meshes.filter(mesh => mesh !== rootMesh);
-                                                 // Remove this observer once flying is complete
-                                                 scene.onBeforeRenderObservable.remove(flyObserver);
-                                             }
-                                         }
-                                     });
-                                 }, 1000); // Start flying after fade-in
-                             }, 1000); // End fade-in setTimeout
-                             
-                             // Wait 1.25 seconds before starting movement
-                             moveTimeout = setTimeout(() => {
-                                 moving = true;
-                             }, 1250);
-                            // Wait 0.5s, then smoothly move camera up by 2 units
-                            setTimeout(() => {
-                                setTimeout(() => {
-                                    // Camera slide up and camera target slide down functionality is commented out for now
-                                    /*
-                                    let startY = camera.position.y;
-                                    let targetY = startY + 2;
-                                    let startTargetY = camera.target.y;
-                                    let targetTargetY = startTargetY - 1;
-                                    let duration = 240; // frames for smooth slide (~4s at 60fps)
-                                    let frame = 0;
-                                    let slideUp = true;
-                                    scene.onBeforeRenderObservable.add(() => {
-                                        if (slideUp) {
-                                            frame++;
-                                            let t = frame / duration;
-                                            if (t > 1) t = 1;
-                                            camera.setPosition(new BABYLON.Vector3(camera.position.x, startY + (targetY - startY) * t, camera.position.z));
-                                            camera.target = new BABYLON.Vector3(camera.target.x, startTargetY + (targetTargetY - startTargetY) * t, camera.target.z);
-                                            if (t === 1) slideUp = false;
-                                        }
-                                    });
-                                    */
-                                }, 660); // Start slide up 0.66s after animation completes
-                            }, 500);
-                        });
-                        // Move mesh toward camera in render loop
-                        scene.onBeforeRenderObservable.add(() => {
-                            if (moving) {
-                                // Move along Z axis toward camera
-                                rootMesh.position.z -= 0.5; // Fast speed
-                                // Stop when mesh is behind camera (camera at z = -7)
-                                if (rootMesh.position.z < -7 - 4.5) { // 4.5 is mesh scale for safety
-                                    moving = false;
-                                }
-                            }
-                        });
-                    }
-                });
-            } else {
-                console.log("No animation groups found in the model"); // Debug log
+    const createRoundedRectPath = (width, height, cornerRadius) => {
+        const path = [];
+        const hw = width / 2 - cornerRadius;
+        const hh = height / 2 - cornerRadius;
+        const segments = 16;
+
+        const corners = [
+            { x: hw, y: hh, startAngle: 0 },                   // Top-right
+            { x: -hw, y: hh, startAngle: Math.PI / 2 },        // Top-left
+            { x: -hw, y: -hh, startAngle: Math.PI },           // Bottom-left
+            { x: hw, y: -hh, startAngle: 3 * Math.PI / 2 }     // Bottom-right
+        ];
+
+        corners.forEach(corner => {
+            for (let i = 0; i <= segments; i++) {
+                const angle = corner.startAngle + (Math.PI / 2) * (i / segments);
+                path.push(new BABYLON.Vector3(corner.x + Math.cos(angle) * cornerRadius, corner.y + Math.sin(angle) * cornerRadius, 0));
             }
         });
 
-        return scene;
-    }
+        path.push(path[0]); // Close the path
+        return path;
+    };
 
-    var scene = createScene();
+    const createText = (text, index, scene) => {
+        const plane = BABYLON.MeshBuilder.CreatePlane(`textPlane${index}`, { width: AppConfig.RECT_WIDTH * 0.8, height: AppConfig.RECT_HEIGHT * 0.3 }, scene);
+        const texture = new BABYLON.DynamicTexture(`textTexture${index}`, { width: 512, height: 128 }, scene, true);
+        texture.drawText(text, null, null, "bold 48px Arial", "white", "transparent", true);
 
-    // Set the canvas resolution
-    engine.setSize(1920, 1080);
+        const material = new BABYLON.StandardMaterial(`textMat${index}`, scene);
+        material.diffuseTexture = texture;
+        material.emissiveTexture = texture;
+        material.emissiveColor = new BABYLON.Color3(1, 1, 1);
+        material.disableLighting = true;
+        material.useAlphaFromDiffuseTexture = true;
+        plane.material = material;
+        return plane;
+    };
 
+    const loadModelAndSetupAnimation = async (camera, allRects) => {
+        const { meshes, animationGroups } = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.MODEL_FILE, scene);
 
-    // run the render loop
-    engine.runRenderLoop(function(){
-    scene.render();
-    // Debug: log camera and mesh positions
-    console.log("Camera position:", scene.activeCamera.position, "Camera target:", scene.activeCamera.target);
-    });
+        const rootMesh = meshes[0];
+        rootMesh.scaling = AppConfig.MESH_SCALE;
+        rootMesh.position = AppConfig.MESH_START_POS;
+        rootMesh.rotation = AppConfig.MESH_ROTATION;
 
-    // the canvas/window resize event handler
-    window.addEventListener('resize', function(){
-        engine.resize();
-    });
+        const motionBlur = new BABYLON.MotionBlurPostProcess("mb", scene, 1.0, camera);
+        motionBlur.motionStrength = AppConfig.MOTION_BLUR_STRENGTH;
+        motionBlur.motionBlurSamples = AppConfig.MOTION_BLUR_SAMPLES;
+        motionBlur.excludedMeshes = [...scene.meshes.filter(m => m !== rootMesh)];
+        motionBlur.isEnabled = false;
+
+        if (animationGroups.length > 0) {
+            const animation = animationGroups[0];
+            animation.stop();
+
+            const onCanvasClick = async () => {
+                canvas.removeEventListener('click', onCanvasClick);
+
+                animation.play(false);
+                await animation.onAnimationEndObservable.runCoroutineAsync(scene);
+
+                motionBlur.isEnabled = true;
+
+                await delay(AppConfig.ANIMATION_DELAY);
+
+                // Animate UI elements
+                await animateUI(allRects, motionBlur, rootMesh);
+
+                // Animate mesh flying past camera
+                animateMeshFly(rootMesh);
+            };
+            canvas.addEventListener('click', onCanvasClick);
+        }
+    };
+
+    const animateUI = async (allRects, motionBlur, rootMesh) => {
+        allRects.forEach(r => r.setEnabled(true));
+
+        // Create animations
+        const fadeAnimation = new BABYLON.Animation("fade", "material.alpha", 60, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+        fadeAnimation.setKeys([{ frame: 0, value: 0 }, { frame: 100, value: 1 }]);
+
+        const flyAnimation = new BABYLON.Animation("fly", "position.z", 60, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+        flyAnimation.setKeys([{ frame: 0, value: AppConfig.RECT_START_Z }, { frame: 100, value: AppConfig.RECT_TARGET_Z }]);
+
+        // Run animations with promises
+        const fadePromises = allRects
+            .filter(r => r.material)
+            .map(r => scene.beginDirectAnimation(r, [fadeAnimation], 0, 100, false, 1, null, AppConfig.FADE_DURATION / 1000).waitAsync());
+        await Promise.all(fadePromises);
+
+        motionBlur.excludedMeshes.push(...allRects);
+
+        const flyPromises = allRects.map(r => scene.beginDirectAnimation(r, [flyAnimation], 0, 100, false, 1, null, AppConfig.FLY_DURATION / 1000).waitAsync());
+        await Promise.all(flyPromises);
+
+        motionBlur.excludedMeshes = scene.meshes.filter(m => m !== rootMesh);
+    };
+
+    const animateMeshFly = (rootMesh) => {
+        const observer = scene.onBeforeRenderObservable.add(() => {
+            rootMesh.position.z -= AppConfig.MESH_FLY_SPEED;
+            if (rootMesh.position.z < -12) { // Past camera
+                scene.onBeforeRenderObservable.remove(observer);
+            }
+        });
+    };
+
+    //-- MAIN EXECUTION --//
+    const main = async () => {
+        const camera = createCamera();
+        createLighting();
+        const allRects = createUI();
+        await loadModelAndSetupAnimation(camera, allRects);
+
+        engine.runRenderLoop(() => scene.render());
+        window.addEventListener('resize', () => engine.resize());
+        window.scene_ready = true; // Signal for Playwright
+    };
+
+    main();
 });
