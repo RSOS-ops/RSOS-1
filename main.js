@@ -26,6 +26,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         ANIMATION_DELAY: 1000, // ms
         FADE_DURATION: 1000, // ms
         FLY_DURATION: 1000, // ms
+        MOVE_DELAY: 1250, // ms
     };
 
     //-- UTILITY FUNCTIONS --//
@@ -155,13 +156,14 @@ window.addEventListener('DOMContentLoaded', async () => {
 
                 motionBlur.isEnabled = true;
 
-                await delay(AppConfig.ANIMATION_DELAY);
+                // Trigger UI and mesh animations to run concurrently after their respective delays
+                delay(AppConfig.ANIMATION_DELAY).then(() => {
+                    animateUI(allRects, motionBlur, rootMesh);
+                });
 
-                // Animate UI elements
-                await animateUI(allRects, motionBlur, rootMesh);
-
-                // Animate mesh flying past camera
-                animateMeshFly(rootMesh);
+                delay(AppConfig.MOVE_DELAY).then(() => {
+                    animateMeshFly(rootMesh);
+                });
             };
             canvas.addEventListener('click', onCanvasClick);
         }
