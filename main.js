@@ -29,9 +29,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         MOVE_DELAY: 1250, // ms
     };
 
-    //-- UTILITY FUNCTIONS --//
-    const delay = ms => new Promise(res => setTimeout(res, ms));
-
     //-- BABYLON.JS SETUP --//
     const canvas = document.getElementById(AppConfig.CANVAS_ID);
     const engine = new BABYLON.Engine(canvas, true, { antialias: true });
@@ -157,13 +154,13 @@ window.addEventListener('DOMContentLoaded', async () => {
                 motionBlur.isEnabled = true;
 
                 // Trigger UI and mesh animations to run concurrently after their respective delays
-                delay(AppConfig.ANIMATION_DELAY).then(() => {
+                setTimeout(() => {
                     animateUI(allRects, motionBlur, rootMesh);
-                });
+                }, AppConfig.ANIMATION_DELAY);
 
-                delay(AppConfig.MOVE_DELAY).then(() => {
+                setTimeout(() => {
                     animateMeshFly(rootMesh);
-                });
+                }, AppConfig.MOVE_DELAY);
             };
             canvas.addEventListener('click', onCanvasClick);
         }
