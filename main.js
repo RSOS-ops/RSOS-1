@@ -140,14 +140,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     const wizardResult = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.WIZARD_MODEL_FILE, scene);
     const wizardMesh = wizardResult.meshes[0];
     wizardMesh.position = new BABYLON.Vector3(0, AppConfig.RECT_Y_POS - 10, AppConfig.RECT_START_Z - 4); // 4 units in front of rectangles, 5 units lower on y axis
-    wizardMesh.scaling = new BABYLON.Vector3(6.5, 6.5, 6.5); // Appropriate scale for the wizard
+    wizardMesh.scaling = new BABYLON.Vector3(-6.5, 6.5, 6.5); // Mirror on x axis for right-handed orientation
     wizardMesh.setEnabled(false); // Initially hidden like rectangles
         
         // Start wizard animation loop - find and play "wiz.idle" animation
+        let wizardIdleAnimation = null;
+        let wizardAttackAnimation = null;
+        
         if (wizardResult.animationGroups.length > 0) {
-            const idleAnimation = wizardResult.animationGroups.find(anim => anim.name === "wiz.idle");
-            if (idleAnimation) {
-                idleAnimation.play(true); // Loop the idle animation
+            wizardIdleAnimation = wizardResult.animationGroups.find(anim => anim.name === "wiz.idle");
+            wizardAttackAnimation = wizardResult.animationGroups.find(anim => anim.name === "wiz.attackUnder");
+            
+            if (wizardIdleAnimation) {
+                wizardIdleAnimation.play(true); // Loop the idle animation
             } else {
                 // Fallback to first animation if "wiz.idle" not found
                 wizardResult.animationGroups[0].play(true);
@@ -155,6 +160,27 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
         
         wizardMesh.rotation = new BABYLON.Vector3(0, Math.PI, 0); // Rotate 180 degrees to face away
+        
+        // Add click functionality to rectangles for wizard animation
+        const rectangles = allRects.filter((item, index) => index % 3 === 0); // Get only the rectangle meshes (every 3rd item: rect, border, text)
+        
+        rectangles.forEach(rect => {
+            rect.actionManager = new BABYLON.ActionManager(scene);
+            rect.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+                if (wizardIdleAnimation && wizardAttackAnimation) {
+                    // Stop idle animation
+                    wizardIdleAnimation.stop();
+                    
+                    // Play attack animation once
+                    wizardAttackAnimation.play(false); // false means don't loop
+                    
+                    // When attack animation ends, return to idle
+                    wizardAttackAnimation.onAnimationGroupEndObservable.addOnce(() => {
+                        wizardIdleAnimation.play(true); // Resume looping idle animation
+                    });
+                }
+            }));
+        });
         
         // Add wizard to allRects so it animates with them
         allRects.push(wizardMesh);
