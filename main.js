@@ -4,7 +4,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         CANVAS_ID: 'renderCanvas',
         MODEL_PATH: 'models/',
         MODEL_FILE: 'gate-animated-1.glb',
-        WIZARD_MODEL_FILE: 'Wiz_MagicStandingIdle_1.glb',
+        WIZARD_MODEL_FILE: 'Wiz-ComboAnims.glb',
         CAMERA_START_POS: new BABYLON.Vector3(0, -0.5, -7),
         CAMERA_TARGET_OFFSET: new BABYLON.Vector3(0, 1, 0),
         LIGHT_INTENSITY: 1,
@@ -143,13 +143,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     wizardMesh.scaling = new BABYLON.Vector3(6.5, 6.5, 6.5); // Appropriate scale for the wizard
     wizardMesh.setEnabled(false); // Initially hidden like rectangles
         
-        // Start wizard animation loop
+        // Start wizard animation loop - find and play "wiz.idle" animation
         if (wizardResult.animationGroups.length > 0) {
-            const wizardAnimation = wizardResult.animationGroups[0];
-            wizardAnimation.play(true); // Loop the animation
+            const idleAnimation = wizardResult.animationGroups.find(anim => anim.name === "wiz.idle");
+            if (idleAnimation) {
+                idleAnimation.play(true); // Loop the idle animation
+            } else {
+                // Fallback to first animation if "wiz.idle" not found
+                wizardResult.animationGroups[0].play(true);
+            }
         }
         
-        wizardMesh.rotation = new BABYLON.Vector3(0, 0, 0); // Rotate to 0 degrees
+        wizardMesh.rotation = new BABYLON.Vector3(0, Math.PI, 0); // Rotate 180 degrees to face away
         
         // Add wizard to allRects so it animates with them
         allRects.push(wizardMesh);
