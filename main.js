@@ -128,6 +128,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         return plane;
     };
 
+    let wizardLight = null;
+    let wizardMesh = null;
+
     const loadModelAndSetupAnimation = async (camera, allRects) => {
         const { meshes, animationGroups } = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.MODEL_FILE, scene);
 
@@ -138,9 +141,17 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         // Load wizard model
     const wizardResult = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.WIZARD_MODEL_FILE, scene);
-    const wizardMesh = wizardResult.meshes[0];
+    wizardMesh = wizardResult.meshes[0];
     wizardMesh.position = new BABYLON.Vector3(0, AppConfig.RECT_Y_POS - 10, AppConfig.RECT_START_Z - 4); // 4 units in front of rectangles, 5 units lower on y axis
     wizardMesh.scaling = new BABYLON.Vector3(-6.5, 6.5, 6.5); // Mirror on x axis for right-handed orientation
+    wizardMesh.setEnabled(false); // Initially hidden like rectangles
+    
+    // Add a point light at the wizard's position
+    wizardLight = new BABYLON.PointLight("wizardLight", wizardMesh.position.clone(), scene);
+    wizardLight.intensity = 15;
+    wizardLight.range = 1; // Adjust the range as needed
+    wizardLight.position.y += 1; // Raise the light slightly above the wizard
+
     wizardMesh.setEnabled(false); // Initially hidden like rectangles
         
         // Start wizard animation loop - find and play "wiz.idle" animation
@@ -259,7 +270,12 @@ window.addEventListener('DOMContentLoaded', async () => {
         const allRects = createUI();
         await loadModelAndSetupAnimation(camera, allRects);
 
-        engine.runRenderLoop(() => scene.render());
+        engine.runRenderLoop(() => {
+            scene.render();
+            if (wizardLight && wizardMesh) {
+                wizardLight.position.copyFrom(wizardMesh.position);
+            }
+        });
         window.addEventListener('resize', () => engine.resize());
         window.scene_ready = true; // Signal for Playwright
     };
