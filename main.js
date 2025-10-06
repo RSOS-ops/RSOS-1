@@ -216,6 +216,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             rootMesh.position.z -= AppConfig.MESH_FLY_SPEED;
             if (rootMesh.position.z < -12) { // Past camera
                 scene.onBeforeRenderObservable.remove(observer);
+                rootMesh.dispose(); // Unload the gate-animated-1 model from memory
             }
         });
     };
