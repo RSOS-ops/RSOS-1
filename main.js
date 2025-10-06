@@ -4,6 +4,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         CANVAS_ID: 'renderCanvas',
         MODEL_PATH: 'models/',
         MODEL_FILE: 'gate-animated-1.glb',
+        WIZARD_MODEL_FILE: 'Wiz_MagicStandingIdle_1.glb',
         CAMERA_START_POS: new BABYLON.Vector3(0, -0.5, -7),
         CAMERA_TARGET_OFFSET: new BABYLON.Vector3(0, 1, 0),
         LIGHT_INTENSITY: 1,
@@ -135,10 +136,28 @@ window.addEventListener('DOMContentLoaded', async () => {
         rootMesh.position = AppConfig.MESH_START_POS;
         rootMesh.rotation = AppConfig.MESH_ROTATION;
 
+        // Load wizard model
+    const wizardResult = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.WIZARD_MODEL_FILE, scene);
+    const wizardMesh = wizardResult.meshes[0];
+    wizardMesh.position = new BABYLON.Vector3(0, AppConfig.RECT_Y_POS - 10, AppConfig.RECT_START_Z - 4); // 4 units in front of rectangles, 5 units lower on y axis
+    wizardMesh.scaling = new BABYLON.Vector3(6.5, 6.5, 6.5); // Appropriate scale for the wizard
+    wizardMesh.setEnabled(false); // Initially hidden like rectangles
+        
+        // Start wizard animation loop
+        if (wizardResult.animationGroups.length > 0) {
+            const wizardAnimation = wizardResult.animationGroups[0];
+            wizardAnimation.play(true); // Loop the animation
+        }
+        
+        wizardMesh.rotation = new BABYLON.Vector3(0, 0, 0); // Rotate to 0 degrees
+        
+        // Add wizard to allRects so it animates with them
+        allRects.push(wizardMesh);
+
         const motionBlur = new BABYLON.MotionBlurPostProcess("mb", scene, 1.0, camera);
         motionBlur.motionStrength = AppConfig.MOTION_BLUR_STRENGTH;
         motionBlur.motionBlurSamples = AppConfig.MOTION_BLUR_SAMPLES;
-        motionBlur.excludedMeshes = [...scene.meshes.filter(m => m !== rootMesh)];
+        motionBlur.excludedMeshes = [...scene.meshes.filter(m => m !== rootMesh && m !== wizardMesh)];
         motionBlur.isEnabled = false;
 
         if (animationGroups.length > 0) {
