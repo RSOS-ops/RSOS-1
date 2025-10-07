@@ -69,94 +69,15 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     const createSpotLight = () => {
         const spotLight = new BABYLON.SpotLight("wizardSpotLight", 
-            new BABYLON.Vector3(0, 5, 996), // Position (same as point light)
+            new BABYLON.Vector3(0, 13, 996), // Position (same as point light)
             new BABYLON.Vector3(0, -1, 0), // Direction (pointing downward)
-            Math.PI / 3, // Angle (60 degrees)
+            Math.PI / 2, // Angle (90 degrees)
             2, // Exponent
             scene);
         spotLight.intensity = 100;
-        spotLight.range = 5; // Increase range for better visibility
+        spotLight.range = 35; // Increase range for better visibility
         spotLight.setEnabled(false); // Initially hidden like rectangles and wizard
-
-        // Create a wireframe cone mesh as a spotlight helper
-        const cone = BABYLON.MeshBuilder.CreateCylinder("spotlightConeHelper", {
-            diameterTop: 0,
-            diameterBottom: 1, // Will be set in update()
-            height: 1,         // Will be set in update()
-            tessellation: 32
-        }, scene);
-        cone.material = new BABYLON.StandardMaterial("coneMat", scene);
-        cone.material.wireframe = true;
-        cone.material.emissiveColor = new BABYLON.Color3(0, 1, 1); // Cyan wireframe
-        cone.setEnabled(false); // Initially hidden
-
-        // Helper object for manual updates
-        let lastHeight = spotLight.range;
-        let lastAngle = spotLight.angle;
-        let lastPosition = spotLight.position.clone();
-        let lastDirection = spotLight.direction.clone();
-        let lastIntensity = spotLight.intensity;
-        let currentCone = cone;
-        const SpotlightHelper = {
-            light: spotLight,
-            get cone() { return currentCone; },
-            update: function() {
-                const h = spotLight.range;
-                const r = Math.tan(spotLight.angle / 2) * h;
-                
-                // If range or angle changed, recreate the cone mesh
-                if (h !== lastHeight || spotLight.angle !== lastAngle) {
-                    currentCone.dispose();
-                    currentCone = BABYLON.MeshBuilder.CreateCylinder("spotlightConeHelper", {
-                        diameterTop: 0,
-                        diameterBottom: 2 * r,
-                        height: h,
-                        tessellation: 32
-                    }, scene);
-                    currentCone.material = new BABYLON.StandardMaterial("coneMat", scene);
-                    currentCone.material.wireframe = true;
-                    currentCone.material.emissiveColor = new BABYLON.Color3(0, 1, 1);
-                    currentCone.setEnabled(spotLight.isEnabled());
-                    lastHeight = h;
-                    lastAngle = spotLight.angle;
-                }
-                
-                // Always update position and direction (even if they haven't changed, to be safe)
-                currentCone.position.copyFrom(spotLight.position).addInPlace(spotLight.direction.scale(h / 2));
-                
-                // Manually calculate rotation to match spotlight direction
-                const direction = spotLight.direction.normalize();
-                // Calculate rotation angles from direction vector
-                const rotationY = Math.atan2(direction.x, direction.z);
-                const rotationX = Math.asin(-direction.y);
-                currentCone.rotation.x = rotationX - Math.PI / 2; // Adjust for cone's initial orientation
-                currentCone.rotation.y = rotationY;
-                currentCone.rotation.z = 0;
-                
-                // Update material properties based on spotlight intensity
-                currentCone.material.wireframe = true;
-                const intensityFactor = Math.min(spotLight.intensity / 100, 1); // Normalize intensity
-                currentCone.material.emissiveColor = new BABYLON.Color3(0, intensityFactor, intensityFactor);
-                currentCone.material.alpha = Math.max(0.3, intensityFactor); // Minimum visibility
-                
-                // Update enabled state to match spotlight
-                currentCone.setEnabled(spotLight.isEnabled());
-                
-                // Cache current values for change detection
-                lastPosition.copyFrom(spotLight.position);
-                lastDirection.copyFrom(spotLight.direction);
-                lastIntensity = spotLight.intensity;
-            }
-        };
-        
-        // Auto-update every frame (temporary helper while building the site)
-        scene.onBeforeRenderObservable.add(() => {
-            SpotlightHelper.update();
-        });
-        
-        // Initial update
-        SpotlightHelper.update();
-        return SpotlightHelper;
+        return { light: spotLight };
     };
 
     const createUI = () => {
@@ -368,12 +289,25 @@ window.addEventListener('DOMContentLoaded', async () => {
             console.log("Camera created");
             createLighting();
             console.log("Lighting created");
-            const spotLightHelper = createSpotLight();
+            const spotLightObj = createSpotLight();
             console.log("Spotlight created");
             const allRects = createUI();
-            allRects.push(spotLightHelper.light); // Add spotlight to fly with rectangles and wizard
-            allRects.push(spotLightHelper.cone); // Add cone helper to fly with rectangles and wizard
+            allRects.push(spotLightObj.light); // Add spotlight to fly with rectangles and wizard
             console.log("UI created");
+
+            // Spotlight independent fly logic (no mesh helper)
+            const spotlight = spotLightObj.light;
+            spotlight.setEnabled(true);
+            spotlight.position = new BABYLON.Vector3(0, 13, AppConfig.RECT_START_Z + 5); // Start just behind rectangles
+            const spotlightTargetZ = AppConfig.RECT_TARGET_Z;
+            const spotlightSpeed = AppConfig.MESH_FLY_SPEED;
+            const spotlightObserver = scene.onBeforeRenderObservable.add(() => {
+                spotlight.position.z -= spotlightSpeed;
+                if (spotlight.position.z < spotlightTargetZ) {
+                    scene.onBeforeRenderObservable.remove(spotlightObserver);
+                    spotlight.setEnabled(false);
+                }
+            });
             await loadModelAndSetupAnimation(camera, allRects);
             console.log("Models loaded");
 
