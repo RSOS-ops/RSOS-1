@@ -1,9 +1,17 @@
 window.addEventListener('DOMContentLoaded', async () => {
+    // const createPointLight = () => {
+    //     const pointLight = new BABYLON.PointLight("wizardLight", new BABYLON.Vector3(0, -2.5, 996), scene);
+    //     pointLight.intensity = 100;
+    //     pointLight.range = 1; // Decrease the light's range to 1
+    //     pointLight.setEnabled(false); // Initially hidden like rectangles and wizard
+    //     return pointLight;
+    // };
+
     //-- CONFIGURATION --//
     const AppConfig = {
         CANVAS_ID: 'renderCanvas',
         MODEL_PATH: 'models/',
-        MODEL_FILE: 'gate-animated-1.glb',
+    MODEL_FILE: 'gate-animated-2-emissive.glb',
         WIZARD_MODEL_FILE: 'Wiz-ComboAnims.glb',
         CAMERA_START_POS: new BABYLON.Vector3(0, -0.5, -7),
         CAMERA_TARGET_OFFSET: new BABYLON.Vector3(0, 1, 0),
@@ -49,6 +57,106 @@ window.addEventListener('DOMContentLoaded', async () => {
         light.intensity = AppConfig.LIGHT_INTENSITY;
         const glowLayer = new BABYLON.GlowLayer("glow", scene);
         glowLayer.intensity = AppConfig.GLOW_INTENSITY;
+    };
+
+    // const createPointLight = () => {
+    //     const pointLight = new BABYLON.PointLight("wizardLight", new BABYLON.Vector3(0, 2.5, 996), scene);
+    //     pointLight.intensity = 25;
+    //     pointLight.range = 2; // Decrease the light's range to 1
+    //     pointLight.setEnabled(false); // Initially hidden like rectangles and wizard
+    //     return pointLight;
+    // };
+
+    const createSpotLight = () => {
+        const spotLight = new BABYLON.SpotLight("wizardSpotLight", 
+            new BABYLON.Vector3(0, 5, 996), // Position (same as point light)
+            new BABYLON.Vector3(0, -1, 0), // Direction (pointing downward)
+            Math.PI / 3, // Angle (60 degrees)
+            2, // Exponent
+            scene);
+        spotLight.intensity = 100;
+        spotLight.range = 5; // Increase range for better visibility
+        spotLight.setEnabled(false); // Initially hidden like rectangles and wizard
+
+        // Create a wireframe cone mesh as a spotlight helper
+        const cone = BABYLON.MeshBuilder.CreateCylinder("spotlightConeHelper", {
+            diameterTop: 0,
+            diameterBottom: 1, // Will be set in update()
+            height: 1,         // Will be set in update()
+            tessellation: 32
+        }, scene);
+        cone.material = new BABYLON.StandardMaterial("coneMat", scene);
+        cone.material.wireframe = true;
+        cone.material.emissiveColor = new BABYLON.Color3(0, 1, 1); // Cyan wireframe
+        cone.setEnabled(false); // Initially hidden
+
+        // Helper object for manual updates
+        let lastHeight = spotLight.range;
+        let lastAngle = spotLight.angle;
+        let lastPosition = spotLight.position.clone();
+        let lastDirection = spotLight.direction.clone();
+        let lastIntensity = spotLight.intensity;
+        let currentCone = cone;
+        const SpotlightHelper = {
+            light: spotLight,
+            get cone() { return currentCone; },
+            update: function() {
+                const h = spotLight.range;
+                const r = Math.tan(spotLight.angle / 2) * h;
+                
+                // If range or angle changed, recreate the cone mesh
+                if (h !== lastHeight || spotLight.angle !== lastAngle) {
+                    currentCone.dispose();
+                    currentCone = BABYLON.MeshBuilder.CreateCylinder("spotlightConeHelper", {
+                        diameterTop: 0,
+                        diameterBottom: 2 * r,
+                        height: h,
+                        tessellation: 32
+                    }, scene);
+                    currentCone.material = new BABYLON.StandardMaterial("coneMat", scene);
+                    currentCone.material.wireframe = true;
+                    currentCone.material.emissiveColor = new BABYLON.Color3(0, 1, 1);
+                    currentCone.setEnabled(spotLight.isEnabled());
+                    lastHeight = h;
+                    lastAngle = spotLight.angle;
+                }
+                
+                // Always update position and direction (even if they haven't changed, to be safe)
+                currentCone.position.copyFrom(spotLight.position).addInPlace(spotLight.direction.scale(h / 2));
+                
+                // Manually calculate rotation to match spotlight direction
+                const direction = spotLight.direction.normalize();
+                // Calculate rotation angles from direction vector
+                const rotationY = Math.atan2(direction.x, direction.z);
+                const rotationX = Math.asin(-direction.y);
+                currentCone.rotation.x = rotationX - Math.PI / 2; // Adjust for cone's initial orientation
+                currentCone.rotation.y = rotationY;
+                currentCone.rotation.z = 0;
+                
+                // Update material properties based on spotlight intensity
+                currentCone.material.wireframe = true;
+                const intensityFactor = Math.min(spotLight.intensity / 100, 1); // Normalize intensity
+                currentCone.material.emissiveColor = new BABYLON.Color3(0, intensityFactor, intensityFactor);
+                currentCone.material.alpha = Math.max(0.3, intensityFactor); // Minimum visibility
+                
+                // Update enabled state to match spotlight
+                currentCone.setEnabled(spotLight.isEnabled());
+                
+                // Cache current values for change detection
+                lastPosition.copyFrom(spotLight.position);
+                lastDirection.copyFrom(spotLight.direction);
+                lastIntensity = spotLight.intensity;
+            }
+        };
+        
+        // Auto-update every frame (temporary helper while building the site)
+        scene.onBeforeRenderObservable.add(() => {
+            SpotlightHelper.update();
+        });
+        
+        // Initial update
+        SpotlightHelper.update();
+        return SpotlightHelper;
     };
 
     const createUI = () => {
@@ -128,9 +236,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         return plane;
     };
 
-    let wizardLight = null;
-    let wizardMesh = null;
-
     const loadModelAndSetupAnimation = async (camera, allRects) => {
         const { meshes, animationGroups } = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.MODEL_FILE, scene);
 
@@ -141,17 +246,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
         // Load wizard model
     const wizardResult = await BABYLON.SceneLoader.ImportMeshAsync("", AppConfig.MODEL_PATH, AppConfig.WIZARD_MODEL_FILE, scene);
-    wizardMesh = wizardResult.meshes[0];
+    const wizardMesh = wizardResult.meshes[0];
     wizardMesh.position = new BABYLON.Vector3(0, AppConfig.RECT_Y_POS - 10, AppConfig.RECT_START_Z - 4); // 4 units in front of rectangles, 5 units lower on y axis
     wizardMesh.scaling = new BABYLON.Vector3(-6.5, 6.5, 6.5); // Mirror on x axis for right-handed orientation
-    wizardMesh.setEnabled(false); // Initially hidden like rectangles
-    
-    // Add a point light at the wizard's position
-    wizardLight = new BABYLON.PointLight("wizardLight", wizardMesh.position.clone(), scene);
-    wizardLight.intensity = 15;
-    wizardLight.range = 1; // Adjust the range as needed
-    wizardLight.position.y += 1; // Raise the light slightly above the wizard
-
     wizardMesh.setEnabled(false); // Initially hidden like rectangles
         
         // Start wizard animation loop - find and play "wiz.idle" animation
@@ -239,7 +336,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const flyAnimation = new BABYLON.Animation("fly", "position.z", 60, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
         flyAnimation.setKeys([{ frame: 0, value: AppConfig.RECT_START_Z }, { frame: 100, value: AppConfig.RECT_TARGET_Z }]);
 
-        // Run animations with promises
+        // Run animations with promises - only fade elements with materials (exclude lights)
         const fadePromises = allRects
             .filter(r => r.material)
             .map(r => scene.beginDirectAnimation(r, [fadeAnimation], 0, 100, false, 1, null, AppConfig.FADE_DURATION / 1000).waitAsync());
@@ -265,19 +362,28 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     //-- MAIN EXECUTION --//
     const main = async () => {
-        const camera = createCamera();
-        createLighting();
-        const allRects = createUI();
-        await loadModelAndSetupAnimation(camera, allRects);
+        try {
+            console.log("Starting main function...");
+            const camera = createCamera();
+            console.log("Camera created");
+            createLighting();
+            console.log("Lighting created");
+            const spotLightHelper = createSpotLight();
+            console.log("Spotlight created");
+            const allRects = createUI();
+            allRects.push(spotLightHelper.light); // Add spotlight to fly with rectangles and wizard
+            allRects.push(spotLightHelper.cone); // Add cone helper to fly with rectangles and wizard
+            console.log("UI created");
+            await loadModelAndSetupAnimation(camera, allRects);
+            console.log("Models loaded");
 
-        engine.runRenderLoop(() => {
-            scene.render();
-            if (wizardLight && wizardMesh) {
-                wizardLight.position.copyFrom(wizardMesh.position);
-            }
-        });
-        window.addEventListener('resize', () => engine.resize());
-        window.scene_ready = true; // Signal for Playwright
+            engine.runRenderLoop(() => scene.render());
+            window.addEventListener('resize', () => engine.resize());
+            window.scene_ready = true; // Signal for Playwright
+            console.log("Scene ready");
+        } catch (error) {
+            console.error("Error in main function:", error);
+        }
     };
 
     main();
